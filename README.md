@@ -5,8 +5,8 @@ evidence-backed root-cause analysis.
 
 ## Current status
 
-Phase 0, Phase 1, Phase 2, and Phase 3 (Metrics Aggregation) are completed.
-Phase 4 — Historical Baselines is currently active.
+Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 (Historical Baselines) are completed.
+Phase 5 — Degradation Detection is currently active.
 
 ## Local setup
 

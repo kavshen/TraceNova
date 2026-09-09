@@ -93,3 +93,28 @@ class TimeseriesMetricPoint(BaseModel):
     timestamp: datetime
     duration_ms: float
     status: PipelineStatus
+
+
+class PipelineBaseline(BaseModel):
+    """Calculated historical baseline representing normal pipeline behavior."""
+
+    pipeline_id: UUID
+    sample_size: int = 0
+    median_duration_ms: float = 0.0
+    p95_duration_ms: float = 0.0
+    failure_rate: float = 0.0
+    retry_rate: float = 0.0
+    throughput_per_minute: float = 0.0
+    calculated_at: datetime
+
+
+class BaselineComparison(BaseModel):
+    """Comparison of current metrics against historical baseline."""
+
+    pipeline_id: UUID
+    current_metrics: PipelineMetrics
+    baseline: PipelineBaseline
+    duration_ratio: float = 1.0
+    failure_rate_diff: float = 0.0
+    retry_rate_diff: float = 0.0
+    throughput_ratio: float = 1.0

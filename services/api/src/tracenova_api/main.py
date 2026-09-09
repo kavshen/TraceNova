@@ -9,10 +9,13 @@ from redis.asyncio import Redis
 from tracenova_config.settings import Settings, get_settings
 from tracenova_logging.logging import configure_logging
 
+from tracenova_api.baselines import BaselineEngine
 from tracenova_api.event_publisher import EventPublisher
 from tracenova_api.metrics import MetricsAggregator
 from tracenova_api.models import (
+    BaselineComparison,
     Pipeline,
+    PipelineBaseline,
     PipelineCreate,
     PipelineMetrics,
     PipelineRun,
@@ -147,6 +150,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         runs = pipeline_store.list_runs(pipeline_id)
         return MetricsAggregator.calculate_timeseries(runs)
+
+    @app.get(
+        "/pipelines/{pipeline_id}/baseline",
+        response_model=PipelineBaseline,
+        tags=["baselines"],
+    )
+    def get_pipeline_baseline(pipeline_id: UUID) -> PipelineBaseline:
+        """Return the calculated historical baseline for a pipeline."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        return BaselineEngine.calculate_baseline(pipeline_id, runs)
+
+    @app.get(
+        "/pipelines/{pipeline_id}/baseline/compare",
+        response_model=BaselineComparison,
+        tags=["baselines"],
+    )
+    def compare_pipeline_baseline(pipeline_id: UUID) -> BaselineComparison:
+        """Compare current pipeline metrics against historical baseline."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+        baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+        return BaselineEngine.compare(current_metrics, baseline)
 
     return app
 
