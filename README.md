@@ -5,8 +5,8 @@ evidence-backed root-cause analysis.
 
 ## Current status
 
-Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 (Historical Baselines) are completed.
-Phase 5 — Degradation Detection is currently active.
+Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, and Phase 5 (Degradation Detection) are completed.
+Phase 6 — GREEN / AMBER / RED Classification is currently active.
 
 ## Local setup
 

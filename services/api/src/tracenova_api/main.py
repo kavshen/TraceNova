@@ -10,10 +10,12 @@ from tracenova_config.settings import Settings, get_settings
 from tracenova_logging.logging import configure_logging
 
 from tracenova_api.baselines import BaselineEngine
+from tracenova_api.degradation import DegradationDetector
 from tracenova_api.event_publisher import EventPublisher
 from tracenova_api.metrics import MetricsAggregator
 from tracenova_api.models import (
     BaselineComparison,
+    DegradationReport,
     Pipeline,
     PipelineBaseline,
     PipelineCreate,
@@ -55,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     pipeline_store = PipelineStore()
     simulator = PipelineSimulator()
+    degradation_detector = DegradationDetector()
 
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
@@ -182,6 +185,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
         baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
         return BaselineEngine.compare(current_metrics, baseline)
+
+    @app.get(
+        "/pipelines/{pipeline_id}/degradation",
+        response_model=DegradationReport,
+        tags=["degradation"],
+    )
+    def get_pipeline_degradation(pipeline_id: UUID) -> DegradationReport:
+        """Evaluate baseline comparison against detector and return degradation report."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+        baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+        comparison = BaselineEngine.compare(current_metrics, baseline)
+        return degradation_detector.evaluate(comparison)
 
     return app
 

@@ -118,3 +118,42 @@ class BaselineComparison(BaseModel):
     failure_rate_diff: float = 0.0
     retry_rate_diff: float = 0.0
     throughput_ratio: float = 1.0
+
+
+class SignalType(StrEnum):
+    """Types of performance degradation signals."""
+
+    DURATION_DEGRADATION = "DURATION_DEGRADATION"
+    FAILURE_RATE_INCREASE = "FAILURE_RATE_INCREASE"
+    RETRY_RATE_INCREASE = "RETRY_RATE_INCREASE"
+    THROUGHPUT_DECREASE = "THROUGHPUT_DECREASE"
+
+
+class SignalSeverity(StrEnum):
+    """Severity classification for a detection signal."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class DetectionSignal(BaseModel):
+    """Structured detection signal produced when performance degrades."""
+
+    pipeline_id: UUID
+    signal_type: SignalType
+    current_value: float
+    baseline_value: float
+    deviation: float
+    threshold: float
+    severity: SignalSeverity
+    timestamp: datetime
+
+
+class DegradationReport(BaseModel):
+    """Full degradation evaluation report for a pipeline."""
+
+    pipeline_id: UUID
+    is_degraded: bool
+    signals: list[DetectionSignal]
+    evaluated_at: datetime
