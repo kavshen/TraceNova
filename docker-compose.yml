@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-tracenova}
       POSTGRES_USER: ${POSTGRES_USER:-tracenova}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracenova}
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -15,8 +13,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -44,4 +40,18 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-
+ 
+  event-consumer:
+    build:
+      context: .
+    command: ["python", "-m", "tracenova_api.event_worker"]
+    environment:
+      TRACENOVA_ENVIRONMENT: development
+      TRACENOVA_LOG_LEVEL: INFO
+      TRACENOVA_REDIS_URL: redis://redis:6379/0
+      TRACENOVA_REDIS_STREAM_NAME: tracenova:events
+      TRACENOVA_REDIS_CONSUMER_GROUP: tracenova-processors
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped

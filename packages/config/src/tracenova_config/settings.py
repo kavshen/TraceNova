@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str = "postgresql+asyncpg://tracenova:tracenova@localhost:5432/tracenova"
     redis_url: str = "redis://localhost:6379/0"
+    redis_stream_name: str = "tracenova:events"
+    redis_consumer_group: str = "tracenova-processors"
+    redis_dead_letter_stream: str = "tracenova:events:dlq"
 
 
 @lru_cache

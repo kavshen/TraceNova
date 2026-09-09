@@ -1,11 +1,15 @@
 """HTTP entry point for the TraceNova API service."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, status
+from redis.asyncio import Redis
 from tracenova_config.settings import Settings, get_settings
 from tracenova_logging.logging import configure_logging
 
+from tracenova_api.event_publisher import EventPublisher
 from tracenova_api.models import (
     Pipeline,
     PipelineCreate,
@@ -18,11 +22,31 @@ from tracenova_api.store import PipelineStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Create the API application without connecting to optional dependencies."""
+    """Create the API application."""
     active_settings = settings or get_settings()
     configure_logging(active_settings.log_level)
 
-    app = FastAPI(title=active_settings.app_name, version="0.1.0")
+    redis_client = Redis.from_url(
+        active_settings.redis_url,
+        decode_responses=True,
+    )
+    event_publisher = EventPublisher(
+        redis_client,
+        active_settings.redis_stream_name,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            await redis_client.aclose()
+
+    app = FastAPI(
+        title=active_settings.app_name,
+        version="0.1.0",
+        lifespan=lifespan,
+    )
     pipeline_store = PipelineStore()
     simulator = PipelineSimulator()
 
@@ -56,8 +80,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status_code=status.HTTP_201_CREATED,
         tags=["pipelines"],
     )
-    def run_pipeline(pipeline_id: UUID, payload: RunPipelineRequest) -> SimulationResult:
-        """Run a deterministic pipeline simulation."""
+    async def run_pipeline(
+        pipeline_id: UUID,
+        payload: RunPipelineRequest,
+    ) -> SimulationResult:
+        """Run a simulation and publish its events to Redis."""
         pipeline = pipeline_store.get_pipeline(pipeline_id)
         if pipeline is None:
             raise HTTPException(
@@ -67,6 +94,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         result = simulator.simulate(pipeline, payload)
         pipeline_store.add_runs(result.runs)
+
+        for event in result.events:
+            await event_publisher.publish(event)
+
         return result
 
     @app.get(
@@ -75,7 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["pipelines"],
     )
     def list_pipeline_runs(pipeline_id: UUID) -> list[PipelineRun]:
-        """Return the execution history for one pipeline."""
+        """Return execution history for one pipeline."""
         if pipeline_store.get_pipeline(pipeline_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
