@@ -5,8 +5,8 @@ evidence-backed root-cause analysis.
 
 ## Current status
 
-Phase 0 — Repository Foundation is in progress. The first application feature, the
-synthetic pipeline simulator, begins only after this foundation is validated and pushed.
+Phase 0, Phase 1, Phase 2, and Phase 3 (Metrics Aggregation) are completed.
+Phase 4 — Historical Baselines is currently active.
 
 ## Local setup
 

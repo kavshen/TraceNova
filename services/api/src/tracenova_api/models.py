@@ -68,3 +68,28 @@ class SimulationResult(BaseModel):
 
     runs: list[PipelineRun]
     events: list[PipelineEvent]
+
+
+class PipelineMetrics(BaseModel):
+    """Aggregated operational metrics for a pipeline."""
+
+    pipeline_id: UUID
+    total_runs: int = 0
+    successful_runs: int = 0
+    failed_runs: int = 0
+    retried_runs: int = 0
+    success_rate: float = 0.0
+    failure_rate: float = 0.0
+    retry_rate: float = 0.0
+    avg_duration_ms: float = 0.0
+    median_duration_ms: float = 0.0
+    p95_duration_ms: float = 0.0
+    throughput_per_minute: float = 0.0
+
+
+class TimeseriesMetricPoint(BaseModel):
+    """A metric point over a single time window."""
+
+    timestamp: datetime
+    duration_ms: float
+    status: PipelineStatus

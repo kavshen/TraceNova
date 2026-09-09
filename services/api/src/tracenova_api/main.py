@@ -10,12 +10,15 @@ from tracenova_config.settings import Settings, get_settings
 from tracenova_logging.logging import configure_logging
 
 from tracenova_api.event_publisher import EventPublisher
+from tracenova_api.metrics import MetricsAggregator
 from tracenova_api.models import (
     Pipeline,
     PipelineCreate,
+    PipelineMetrics,
     PipelineRun,
     RunPipelineRequest,
     SimulationResult,
+    TimeseriesMetricPoint,
 )
 from tracenova_api.simulator import PipelineSimulator
 from tracenova_api.store import PipelineStore
@@ -114,6 +117,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
 
         return pipeline_store.list_runs(pipeline_id)
+
+    @app.get(
+        "/metrics/pipelines/{pipeline_id}",
+        response_model=PipelineMetrics,
+        tags=["metrics"],
+    )
+    def get_pipeline_metrics(pipeline_id: UUID) -> PipelineMetrics:
+        """Return aggregated summary metrics for a pipeline."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        return MetricsAggregator.calculate_metrics(pipeline_id, runs)
+
+    @app.get(
+        "/metrics/pipelines/{pipeline_id}/timeseries",
+        response_model=list[TimeseriesMetricPoint],
+        tags=["metrics"],
+    )
+    def get_pipeline_timeseries(pipeline_id: UUID) -> list[TimeseriesMetricPoint]:
+        """Return timeseries metrics for a pipeline."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        return MetricsAggregator.calculate_timeseries(runs)
 
     return app
 
