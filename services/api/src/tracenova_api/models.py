@@ -157,3 +157,21 @@ class DegradationReport(BaseModel):
     is_degraded: bool
     signals: list[DetectionSignal]
     evaluated_at: datetime
+
+
+class HealthStatus(StrEnum):
+    """Pipeline health status classification."""
+
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    CRITICAL = "CRITICAL"
+
+
+class PipelineHealthClassification(BaseModel):
+    """Explainable health status classification for a pipeline."""
+
+    pipeline_id: UUID
+    status: HealthStatus
+    reasons: list[SignalType]
+    report: DegradationReport
+    classified_at: datetime

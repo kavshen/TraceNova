@@ -10,6 +10,7 @@ from tracenova_config.settings import Settings, get_settings
 from tracenova_logging.logging import configure_logging
 
 from tracenova_api.baselines import BaselineEngine
+from tracenova_api.classifier import HealthClassifier
 from tracenova_api.degradation import DegradationDetector
 from tracenova_api.event_publisher import EventPublisher
 from tracenova_api.metrics import MetricsAggregator
@@ -19,6 +20,7 @@ from tracenova_api.models import (
     Pipeline,
     PipelineBaseline,
     PipelineCreate,
+    PipelineHealthClassification,
     PipelineMetrics,
     PipelineRun,
     RunPipelineRequest,
@@ -203,6 +205,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
         comparison = BaselineEngine.compare(current_metrics, baseline)
         return degradation_detector.evaluate(comparison)
+
+    @app.get(
+        "/pipelines/{pipeline_id}/health",
+        response_model=PipelineHealthClassification,
+        tags=["health"],
+    )
+    def get_pipeline_health(pipeline_id: UUID) -> PipelineHealthClassification:
+        """Classify pipeline health into HEALTHY, DEGRADED, or CRITICAL status."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+        baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+        comparison = BaselineEngine.compare(current_metrics, baseline)
+        report = degradation_detector.evaluate(comparison)
+        return HealthClassifier.classify(report)
 
     return app
 
