@@ -9,6 +9,7 @@ from tracenova_api.models import (
     PipelineBaseline,
     PipelineMetrics,
     PipelineRun,
+    PipelineStatus,
 )
 
 
@@ -29,7 +30,14 @@ class BaselineEngine:
                 calculated_at=datetime.now(UTC),
             )
 
-        metrics = MetricsAggregator.calculate_metrics(pipeline_id, sorted_runs)
+        # Base normal baseline performance on successful execution attempts
+        successful_runs = [
+            r for r in sorted_runs
+            if r.status == PipelineStatus.SUCCESS and r.attempt == 1
+        ]
+        baseline_runs = successful_runs if successful_runs else sorted_runs
+
+        metrics = MetricsAggregator.calculate_metrics(pipeline_id, baseline_runs)
         return PipelineBaseline(
             pipeline_id=pipeline_id,
             sample_size=metrics.total_runs,

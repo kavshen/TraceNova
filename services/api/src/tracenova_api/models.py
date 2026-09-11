@@ -175,3 +175,35 @@ class PipelineHealthClassification(BaseModel):
     reasons: list[SignalType]
     report: DegradationReport
     classified_at: datetime
+
+
+class IncidentStatus(StrEnum):
+    """Lifecycle states of an operational incident."""
+
+    OPEN = "OPEN"
+    INVESTIGATING = "INVESTIGATING"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+
+
+class Incident(BaseModel):
+    """An operational incident created when pipeline degradation occurs."""
+
+    id: UUID = Field(default_factory=uuid4)
+    pipeline_id: UUID
+    severity: SignalSeverity
+    status: IncidentStatus = IncidentStatus.OPEN
+    created_at: datetime
+    updated_at: datetime
+    correlation_id: UUID = Field(default_factory=uuid4)
+    reason_codes: list[SignalType] = Field(default_factory=list)
+    hypothesis: str | None = None
+    root_cause: str | None = None
+
+
+class UpdateIncidentStatusRequest(BaseModel):
+    """Input payload for updating an incident status and details."""
+
+    status: IncidentStatus
+    hypothesis: str | None = None
+    root_cause: str | None = None

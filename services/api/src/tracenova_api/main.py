@@ -13,10 +13,13 @@ from tracenova_api.baselines import BaselineEngine
 from tracenova_api.classifier import HealthClassifier
 from tracenova_api.degradation import DegradationDetector
 from tracenova_api.event_publisher import EventPublisher
+from tracenova_api.incidents import IncidentManager
 from tracenova_api.metrics import MetricsAggregator
 from tracenova_api.models import (
     BaselineComparison,
     DegradationReport,
+    Incident,
+    IncidentStatus,
     Pipeline,
     PipelineBaseline,
     PipelineCreate,
@@ -60,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     pipeline_store = PipelineStore()
     simulator = PipelineSimulator()
     degradation_detector = DegradationDetector()
+    incident_manager = IncidentManager()
 
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
@@ -224,6 +228,58 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         comparison = BaselineEngine.compare(current_metrics, baseline)
         report = degradation_detector.evaluate(comparison)
         return HealthClassifier.classify(report)
+
+    @app.post(
+        "/pipelines/{pipeline_id}/incidents/evaluate",
+        response_model=Incident | None,
+        tags=["incidents"],
+    )
+    def evaluate_pipeline_incident(pipeline_id: UUID) -> Incident | None:
+        """Classify current health and idempotently open/update an incident if degraded."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+        baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+        comparison = BaselineEngine.compare(current_metrics, baseline)
+        report = degradation_detector.evaluate(comparison)
+        classification = HealthClassifier.classify(report)
+        return incident_manager.evaluate_and_trigger(classification)
+
+    @app.get("/incidents", response_model=list[Incident], tags=["incidents"])
+    def list_incidents_route() -> list[Incident]:
+        """Return all stored incidents."""
+        return incident_manager.list_incidents()
+
+    @app.get("/incidents/{incident_id}", response_model=Incident, tags=["incidents"])
+    def get_incident_route(incident_id: UUID) -> Incident:
+        """Return one incident by id."""
+        incident = incident_manager.get_incident(incident_id)
+        if incident is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Incident not found.",
+            )
+        return incident
+
+    @app.post("/incidents/{incident_id}/resolve", response_model=Incident, tags=["incidents"])
+    def resolve_incident_route(incident_id: UUID) -> Incident:
+        """Transition an incident to RESOLVED."""
+        incident = incident_manager.get_incident(incident_id)
+        if incident is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Incident not found.",
+            )
+        if incident.status in (IncidentStatus.RESOLVED, IncidentStatus.CLOSED):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot resolve incident in {incident.status} status.",
+            )
+        return incident_manager.update_status(incident_id, IncidentStatus.RESOLVED)
 
     return app
 

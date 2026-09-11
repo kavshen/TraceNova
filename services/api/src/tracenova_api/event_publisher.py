@@ -1,7 +1,8 @@
-"""Redis Stream publisher for pipeline events."""
-
+import structlog
 from redis.asyncio import Redis
 from tracenova_common.events import PipelineEvent
+
+logger = structlog.get_logger()
 
 
 class EventPublisher:
@@ -13,7 +14,14 @@ class EventPublisher:
 
     async def publish(self, event: PipelineEvent) -> None:
         """Append one event to the configured Redis Stream."""
-        await self._redis_client.xadd(
-            self._stream_name,
-            {"event": event.model_dump_json()},
-        )
+        try:
+            await self._redis_client.xadd(
+                self._stream_name,
+                {"event": event.model_dump_json()},
+            )
+        except Exception as error:
+            logger.warning(
+                "event_publishing_failed",
+                event_id=str(event.event_id),
+                error=str(error),
+            )

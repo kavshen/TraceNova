@@ -22,7 +22,47 @@ def test_calculate_baseline_empty_runs() -> None:
 
 
 def test_baseline_comparison_ratios() -> None:
-    """Validate baseline comparison ratios and differences."""
+    """Validate baseline comparison ratios and differences.
+
+    Baseline excludes failed/retried runs, so this uses only clean SUCCESS/attempt=1
+    runs to assert the self-consistency identity (current == baseline -> ratio 1.0).
+    """
+    pipeline_id = uuid4()
+    start = datetime(2026, 1, 10, 10, 0, tzinfo=UTC)
+
+    runs = [
+        PipelineRun(
+            pipeline_id=pipeline_id,
+            started_at=start,
+            completed_at=start,
+            duration_ms=600_000,
+            status=PipelineStatus.SUCCESS,
+            attempt=1,
+        ),
+        PipelineRun(
+            pipeline_id=pipeline_id,
+            started_at=start,
+            completed_at=start,
+            duration_ms=1_200_000,
+            status=PipelineStatus.SUCCESS,
+            attempt=1,
+        ),
+    ]
+
+    current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+    baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+
+    comparison = BaselineEngine.compare(current_metrics, baseline)
+
+    assert comparison.pipeline_id == pipeline_id
+    assert comparison.duration_ratio == 1.0
+    assert comparison.failure_rate_diff == 0.0
+    assert comparison.retry_rate_diff == 0.0
+    assert comparison.throughput_ratio == 1.0
+
+
+def test_baseline_excludes_failed_and_retried_runs() -> None:
+    """Baseline is computed only from SUCCESS/attempt=1 runs when any exist."""
     pipeline_id = uuid4()
     start = datetime(2026, 1, 10, 10, 0, tzinfo=UTC)
 
@@ -45,16 +85,12 @@ def test_baseline_comparison_ratios() -> None:
         ),
     ]
 
-    current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
     baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
 
-    comparison = BaselineEngine.compare(current_metrics, baseline)
-
-    assert comparison.pipeline_id == pipeline_id
-    assert comparison.duration_ratio == 1.0
-    assert comparison.failure_rate_diff == 0.0
-    assert comparison.retry_rate_diff == 0.0
-    assert comparison.throughput_ratio == 1.0
+    assert baseline.sample_size == 1
+    assert baseline.median_duration_ms == 600_000.0
+    assert baseline.failure_rate == 0.0
+    assert baseline.retry_rate == 0.0
 
 
 def test_baseline_api_endpoints() -> None:
