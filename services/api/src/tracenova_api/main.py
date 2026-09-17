@@ -26,10 +26,12 @@ from tracenova_api.models import (
     PipelineHealthClassification,
     PipelineMetrics,
     PipelineRun,
+    RCAResult,
     RunPipelineRequest,
     SimulationResult,
     TimeseriesMetricPoint,
 )
+from tracenova_api.rca import RCAEngine
 from tracenova_api.simulator import PipelineSimulator
 from tracenova_api.store import PipelineStore
 
@@ -280,6 +282,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 detail=f"Cannot resolve incident in {incident.status} status.",
             )
         return incident_manager.update_status(incident_id, IncidentStatus.RESOLVED)
+
+    @app.get(
+        "/pipelines/{pipeline_id}/rca",
+        response_model=RCAResult,
+        tags=["rca"],
+    )
+    def get_pipeline_rca(pipeline_id: UUID) -> RCAResult:
+        """Run heuristic root-cause analysis on the pipeline's current degradation."""
+        if pipeline_store.get_pipeline(pipeline_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pipeline not found.",
+            )
+        runs = pipeline_store.list_runs(pipeline_id)
+        current_metrics = MetricsAggregator.calculate_metrics(pipeline_id, runs)
+        baseline = BaselineEngine.calculate_baseline(pipeline_id, runs)
+        comparison = BaselineEngine.compare(current_metrics, baseline)
+        report = degradation_detector.evaluate(comparison)
+        return RCAEngine.analyze(report)
 
     return app
 

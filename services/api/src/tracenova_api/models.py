@@ -207,3 +207,34 @@ class UpdateIncidentStatusRequest(BaseModel):
     status: IncidentStatus
     hypothesis: str | None = None
     root_cause: str | None = None
+
+
+class RCACause(StrEnum):
+    """Candidate root causes scored by the heuristic RCA engine."""
+
+    DATABASE_BOTTLENECK = "DATABASE_BOTTLENECK"
+    UPSTREAM_API_FAILURE = "UPSTREAM_API_FAILURE"
+    COMPUTE_SATURATION = "COMPUTE_SATURATION"
+    NETWORK_LATENCY = "NETWORK_LATENCY"
+    DEPENDENCY_FAILURE = "DEPENDENCY_FAILURE"
+    RESOURCE_EXHAUSTION = "RESOURCE_EXHAUSTION"
+    RECENT_DEPLOYMENT = "RECENT_DEPLOYMENT"
+    RETRY_STORM = "RETRY_STORM"
+
+
+class CauseScore(BaseModel):
+    """Explainable score for one candidate root cause."""
+
+    cause: RCACause
+    score: float = Field(ge=0.0, le=1.0)
+    contributing_signals: list[SignalType] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    rule_ids: list[str] = Field(default_factory=list)
+
+
+class RCAResult(BaseModel):
+    """Ranked heuristic root-cause analysis for one degradation report."""
+
+    pipeline_id: UUID
+    causes: list[CauseScore]
+    evaluated_at: datetime
